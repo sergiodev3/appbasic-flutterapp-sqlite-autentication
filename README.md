@@ -278,6 +278,114 @@ flutter pub get
 flutter run
 ```
 
+## Guía para generar APK y probar en dispositivo Android
+
+Esta guía tiene dos caminos:
+
+- **Debug APK**: rápido para pruebas internas.
+- **Release APK firmado**: más cercano a producción.
+
+### 1) Preparar el teléfono Android
+
+1. Activa **Opciones de desarrollador** y **Depuración USB**.
+2. Conecta el dispositivo por USB.
+3. Acepta en el teléfono el mensaje de confianza de la computadora.
+4. Verifica conexión:
+
+```bash
+flutter devices
+```
+
+Si no aparece tu dispositivo, valida drivers USB (Windows) y que el cable soporte datos.
+
+### 2) Generar APK de debug (rápido)
+
+```bash
+flutter clean
+flutter pub get
+flutter build apk --debug
+```
+
+APK generado en:
+
+```text
+build/app/outputs/flutter-apk/app-debug.apk
+```
+
+Para instalar directamente en el dispositivo conectado:
+
+```bash
+flutter install
+```
+
+También puedes copiar el archivo `app-debug.apk` al teléfono e instalarlo manualmente.
+
+### 3) Generar APK release firmado (recomendado para pruebas reales)
+
+#### 3.1 Crear keystore (una sola vez)
+
+En Windows (PowerShell):
+
+```powershell
+keytool -genkey -v -keystore C:/Users/TU_USUARIO/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+```
+
+Guarda de forma segura:
+
+- ruta del keystore
+- alias
+- contraseña del keystore
+- contraseña de la key
+
+#### 3.2 Crear archivo de propiedades de firma
+
+Crear `android/key.properties` con este contenido:
+
+```properties
+storePassword=TU_STORE_PASSWORD
+keyPassword=TU_KEY_PASSWORD
+keyAlias=upload
+storeFile=C:/Users/TU_USUARIO/upload-keystore.jks
+```
+
+#### 3.3 Configurar firma en Gradle
+
+En `android/app/build.gradle.kts` agrega configuración de `signingConfigs` y asigna esa firma al `buildTypes.release`.
+
+Si quieres, puedo hacerlo por ti en este proyecto para dejarlo listo.
+
+#### 3.4 Compilar release
+
+```bash
+flutter clean
+flutter pub get
+flutter build apk --release
+```
+
+APK generado en:
+
+```text
+build/app/outputs/flutter-apk/app-release.apk
+```
+
+### 4) Instalar APK release en el dispositivo
+
+Con ADB:
+
+```bash
+adb install -r build/app/outputs/flutter-apk/app-release.apk
+```
+
+Si da error por versión previa, desinstala primero la app anterior o usa un `applicationId` consistente.
+
+### 5) Solución de problemas comunes
+
+- **Pantalla negra en emulador**: en este proyecto se desactivó Impeller en Android para evitar ese problema en algunos emuladores.
+- **`adb` no reconocido**: abre terminal desde Android Studio o agrega `platform-tools` al `PATH`.
+- **Dispositivo no detectado**: revisa cable, modo USB y autorización RSA en el teléfono.
+- **Error de firma**: confirma contraseñas y ruta en `android/key.properties`.
+- **Instalación bloqueada**: habilita instalación desde orígenes desconocidos para el gestor de archivos que usas.
+
 ## Cómo validar el proyecto
 
 ```bash

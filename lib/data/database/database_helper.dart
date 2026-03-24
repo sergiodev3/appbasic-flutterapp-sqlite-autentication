@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
+import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
@@ -10,7 +11,7 @@ class DatabaseHelper {
 
   static final DatabaseHelper instance = DatabaseHelper._();
   static bool _factoryInitialized = false;
-  Database? _database;
+  sqflite.Database? _database;
 
   static Future<void> initializeFactory() async {
     if (_factoryInitialized) {
@@ -19,13 +20,14 @@ class DatabaseHelper {
 
     if (kIsWeb) {
       // Running without web worker avoids startup failures when worker loading is restricted.
-      databaseFactory = databaseFactoryFfiWebNoWebWorker;
+      sqflite.databaseFactory = databaseFactoryFfiWebNoWebWorker;
     } else {
       switch (defaultTargetPlatform) {
         case TargetPlatform.windows:
         case TargetPlatform.linux:
           sqfliteFfiInit();
-          databaseFactory = databaseFactoryFfi;
+          sqflite.databaseFactory = databaseFactoryFfi;
+          break;
         case TargetPlatform.android:
         case TargetPlatform.iOS:
         case TargetPlatform.macOS:
@@ -37,7 +39,7 @@ class DatabaseHelper {
     _factoryInitialized = true;
   }
 
-  Future<Database> get database async {
+  Future<sqflite.Database> get database async {
     if (_database != null) {
       return _database!;
     }
@@ -47,11 +49,11 @@ class DatabaseHelper {
     return _database!;
   }
 
-  Future<Database> _openDatabase() async {
-    final databasesPath = await getDatabasesPath();
+  Future<sqflite.Database> _openDatabase() async {
+    final databasesPath = await sqflite.getDatabasesPath();
     final databasePath = path.join(databasesPath, AppConstants.databaseName);
 
-    return openDatabase(
+    return sqflite.openDatabase(
       databasePath,
       version: AppConstants.databaseVersion,
       onConfigure: (db) async {
