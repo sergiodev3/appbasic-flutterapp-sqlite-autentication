@@ -386,6 +386,183 @@ Si da error por versión previa, desinstala primero la app anterior o usa un `ap
 - **Error de firma**: confirma contraseñas y ruta en `android/key.properties`.
 - **Instalación bloqueada**: habilita instalación desde orígenes desconocidos para el gestor de archivos que usas.
 
+## Guía para probar en iPhone desde Windows (sin Mac, build en la nube)
+
+Desde Windows no es posible compilar iOS directamente porque Apple requiere Xcode, que solo corre en macOS. Sin embargo, puedes usar **Codemagic** (CI/CD en la nube con runners macOS gratuitos) para compilar el `.ipa` e instalarlo en tu iPhone usando **Sideloadly** desde tu PC con Windows.
+
+### Requisitos previos
+
+- Cuenta gratuita en [codemagic.io](https://codemagic.io)
+- Proyecto en GitHub, GitLab o Bitbucket
+- Cuenta Apple gratuita (Apple ID) o de pago ($99/año)
+- iPhone conectado por USB con **Confiar en esta computadora** aceptado
+- [Sideloadly](https://sideloadly.io) instalado en Windows
+
+---
+
+### 1) Subir el proyecto a GitHub
+
+Si todavía no tienes el proyecto en GitHub, en la terminal del proyecto:
+
+```bash
+git init
+git add .
+git commit -m "Initial commit"
+git remote add origin https://github.com/TU_USUARIO/TU_REPOSITORIO.git
+git push -u origin main
+```
+
+---
+
+### 2) Crear cuenta y conectar repositorio en Codemagic
+
+1. Entra en [codemagic.io](https://codemagic.io) y regístrate con tu cuenta de GitHub.
+2. Haz clic en **Add application**.
+3. Selecciona tu repositorio Flutter.
+4. Codemagic detecta automáticamente que es un proyecto Flutter.
+
+---
+
+### 3) Configurar el workflow de iOS en Codemagic
+
+Codemagic puede configurarse de dos formas: por interfaz visual o con un archivo `codemagic.yaml`. La más rápida para empezar es la **interfaz visual**.
+
+#### Por interfaz visual (recomendado para empezar)
+
+1. Selecciona el workflow **iOS**.
+2. En **Build triggers**, activa Build on push o manténlo manual.
+3. En **Build** → **Flutter version**, selecciona la versión que uses (mínimo 3.27).
+4. En **Distribution**, selecciona:
+   - **iOS code signing** → `Development` (para pruebas en tu dispositivo).
+   - Sube tu **Apple Developer certificate** `.p12` y el **provisioning profile** `.mobileprovision` correspondiente.
+
+> Si no tienes certificado ni perfil, Codemagic puede gestionarlos automáticamente con **Automatic code signing** si conectas tu cuenta Apple en **Team integrations → Apple Developer Portal**.
+
+#### Con archivo codemagic.yaml (control completo)
+
+Crea el archivo en la raíz del proyecto:
+
+```yaml
+workflows:
+  ios-development:
+    name: iOS Development Build
+    max_build_duration: 60
+    environment:
+      flutter: 3.27.0
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install dependencies
+        script: flutter pub get
+      - name: Build iOS (no codesign)
+        script: flutter build ios --debug --no-codesign
+      - name: Build IPA (sin perfil de distribución)
+        script: |
+          cd ios
+          xcodebuild -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Debug \
+            -archivePath build/Runner.xcarchive \
+            archive
+          xcodebuild -exportArchive \
+            -archivePath build/Runner.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist ExportOptions.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+```
+
+---
+
+### 4) Crear el archivo ExportOptions.plist
+
+Crea el archivo `ios/ExportOptions.plist` en el proyecto:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>development</string>
+    <key>teamID</key>
+    <string>TU_TEAM_ID</string>
+    <key>compileBitcode</key>
+    <false/>
+</dict>
+</plist>
+```
+
+Reemplaza `TU_TEAM_ID` con el ID de tu equipo Apple (se ve en [developer.apple.com](https://developer.apple.com) → Membership → Team ID).
+
+---
+
+### 5) Lanzar el build en Codemagic
+
+1. En el dashboard de Codemagic, haz clic en **Start new build**.
+2. Selecciona el workflow iOS que configuraste.
+3. El build tarda entre 8 y 15 minutos.
+4. Al finalizar, descarga el archivo `.ipa` desde la sección **Artifacts**.
+
+---
+
+### 6) Instalar el IPA en el iPhone con Sideloadly (desde Windows)
+
+1. Descarga e instala [Sideloadly](https://sideloadly.io/#download) en Windows.
+2. Conecta el iPhone por USB y confía en la PC si aparece el mensaje.
+3. Abre Sideloadly:
+   - Arrastra el archivo `.ipa` a la ventana o usa el botón de selección.
+   - Ingresa tu Apple ID (cuenta gratuita sirve).
+   - Selecciona tu iPhone en la lista de dispositivos.
+4. Haz clic en **Start**.
+5. Ingresa la contraseña de tu Apple ID cuando se solicite.
+
+#### Confiar la app en el iPhone después de instalar
+
+1. Ve a **Ajustes → General → VPN y gestión del dispositivo**.
+2. Toca tu Apple ID bajo "App del desarrollador".
+3. Toca **Confiar en "tu@email.com"**.
+
+La app ya estará lista para usar.
+
+---
+
+### 7) Limitaciones según el tipo de cuenta Apple
+
+| Restricción | Cuenta gratuita | Apple Developer ($99/año) |
+|---|---|---|
+| Expiración de la app | 7 días | 1 año |
+| Máximo de dispositivos | 3 por semana | 100 por año |
+| Distribución por TestFlight | No | Sí |
+| Publicar en App Store | No | Sí |
+
+Con cuenta gratuita, cada 7 días debes repetir el proceso de instalación desde Sideloadly.
+
+---
+
+### 8) Alternativa: AltStore (sin re-instalar cada 7 días)
+
+**AltStore** es una tienda alternativa que re-firma automáticamente las apps instaladas cada 7 días usando AltServer corriendo en tu PC de fondo.
+
+1. Descarga [AltServer para Windows](https://altstore.io).
+2. Instala AltStore en tu iPhone desde AltServer.
+3. Abre AltStore en el iPhone → sideload del `.ipa` directamente.
+4. AltServer re-firma automáticamente mientras tu PC esté encendida y el iPhone en la misma red Wi-Fi.
+
+---
+
+### Resumen del flujo completo
+
+```mermaid
+flowchart LR
+    A[Código en Windows] --> B[Push a GitHub]
+    B --> C[Codemagic compila en macOS]
+    C --> D[Descarga .ipa]
+    D --> E[Sideloadly instala en iPhone]
+    E --> F[Confiar app en Ajustes]
+    F --> G[App corriendo en iPhone]
+```
+
 ## Cómo validar el proyecto
 
 ```bash
